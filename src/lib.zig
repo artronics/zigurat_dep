@@ -5,11 +5,11 @@ const expect = testing.expect;
 
 pub fn Template() type {
     return struct {
+        const Self = @This();
+
         alloc: Allocator,
         path: []const u8,
         buf: []u8,
-
-        const Self = @This();
 
         pub fn init(allocator: Allocator, path: []const u8) !Self {
             var v = try allocator.alloc(u8, 10);
@@ -19,6 +19,8 @@ pub fn Template() type {
         pub fn deinit(self: Self) void {
             self.alloc.free(self.buf);
         }
+
+        pub fn parse(self: *Self) !void{}
     };
 }
 
