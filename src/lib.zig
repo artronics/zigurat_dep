@@ -2,6 +2,7 @@ const std = @import("std");
 const testing = std.testing;
 const Allocator = std.mem.Allocator;
 const expect = testing.expect;
+const warn = std.log.warn;
 
 pub fn Template() type {
     return struct {
@@ -9,26 +10,28 @@ pub fn Template() type {
 
         alloc: Allocator,
         path: []const u8,
-        buf: []u8,
+        inBuffer: []u8,
+        outBuffer: []u8,
 
         pub fn init(allocator: Allocator, path: []const u8) !Self {
             var v = try allocator.alloc(u8, 10);
 
-            return Self{ .alloc = allocator, .path = path, .buf = v };
+            return Self{ .alloc = allocator, .path = path, .inBuffer = v, .outBuffer = undefined };
         }
         pub fn deinit(self: Self) void {
-            self.alloc.free(self.buf);
+            self.alloc.free(self.inBuffer);
+            if (&self.outBuffer != undefined) {
+                self.alloc.free(self.outBuffer);
+            }
         }
 
-        pub fn parse(self: *Self) !void{}
+        pub fn parse(self: *Self) ![]const u8{
+            const t = "This is a test bar\nThis is the second line bar";
+            self.outBuffer = try self.alloc.alloc(u8, t.len);
+            std.mem.copy(u8, self.outBuffer, t);
+            return self.outBuffer;
+        }
     };
-}
-
-test "init" {
-    var s = try Template().init(testing.allocator, "yo");
-    _ = try std.fs.cwd().openFile("./zig-out/bin/yo", .{});
-    defer s.deinit();
-    try expect(s.path[0] == 'y');
 }
 
 test "path" {

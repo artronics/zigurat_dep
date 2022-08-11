@@ -1,18 +1,21 @@
 const std = @import("std");
 const testing = std.testing;
+const expect = testing.expect;
 const warn = std.log.warn;
 
 const tmp = @import("lib.zig");
 
 test "test" {
     var buffer: [std.fs.MAX_PATH_BYTES]u8 = undefined;
-    const path = try createFile("yo", "This is a test {{ foo }}\nThis is the second line {{ foo }}", buffer[0..]);
-    const t = try tmp.Template().init(testing.allocator, path);
+    const path = try createTestFile("yo", "This is a test {{ foo }}\nThis is the second line {{ foo }}", buffer[0..]);
+    var t = try tmp.Template().init(testing.allocator, path);
     defer t.deinit();
+    const outBuf = try t.parse();
+    try expect(std.mem.eql(u8, outBuf, "This is a test bar\nThis is the second line bar"));
     warn("dir {s}", .{path});
 }
 
-fn createFile(name: []const u8, content: []const u8, outPath: []u8) ![]u8 {
+fn createTestFile(name: []const u8, content: []const u8, outPath: []u8) ![]u8 {
     var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
