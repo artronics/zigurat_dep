@@ -4,6 +4,7 @@ const Allocator = std.mem.Allocator;
 const expect = testing.expect;
 const warn = std.log.warn;
 
+
 pub fn Template() type {
     return struct {
         const Self = @This();
@@ -25,7 +26,7 @@ pub fn Template() type {
             }
         }
 
-        pub fn parse(self: *Self) ![]const u8{
+        pub fn parse(self: *Self) ![]const u8 {
             const t = "This is a test bar\nThis is the second line bar";
             self.outBuffer = try self.alloc.alloc(u8, t.len);
             std.mem.copy(u8, self.outBuffer, t);
@@ -35,7 +36,7 @@ pub fn Template() type {
 }
 
 test "path" {
-    var buf:[100]u8 = undefined;
+    var buf: [100]u8 = undefined;
     var s: []u8 = buf[0..];
     const ff = try std.fs.cwd().realpath("./zig-out/bin/yo", s);
     std.log.warn("abs {s}", .{ff}); // get the abs part from rel part
