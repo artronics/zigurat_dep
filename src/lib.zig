@@ -1,84 +1,79 @@
 const std = @import("std");
-const testing = std.testing;
 const Allocator = std.mem.Allocator;
-const expect = testing.expect;
 const warn = std.log.warn;
-
 
 pub fn Template() type {
     return struct {
         const Self = @This();
 
-        alloc: Allocator,
+        allocator: Allocator,
         path: []const u8,
-        inBuffer: []u8,
-        outBuffer: []u8,
+        content: []const u8,
 
         pub fn init(allocator: Allocator, path: []const u8) !Self {
-            var v = try allocator.alloc(u8, 10);
+            const content = try openFile(allocator, path);
 
-            return Self{ .alloc = allocator, .path = path, .inBuffer = v, .outBuffer = undefined };
+            return Self{
+                .allocator = allocator,
+                .path = path,
+                .content = content,
+            };
         }
+
         pub fn deinit(self: Self) void {
-            self.alloc.free(self.inBuffer);
-            if (&self.outBuffer != undefined) {
-                self.alloc.free(self.outBuffer);
-            }
+            self.allocator.free(self.content);
         }
 
         pub fn parse(self: *Self) ![]const u8 {
-            const t = "This is a test bar\nThis is the second line bar";
-            self.outBuffer = try self.alloc.alloc(u8, t.len);
-            std.mem.copy(u8, self.outBuffer, t);
-            return self.outBuffer;
+            // TODO: add parser
+            return self.content;
+        }
+
+        pub fn output(self: *Self) ![]const u8 {
+            // TODO: return final buffer
+            return self.content;
         }
     };
 }
 
-test "path" {
-    var buf: [100]u8 = undefined;
-    var s: []u8 = buf[0..];
-    const ff = try std.fs.cwd().realpath("./zig-out/bin/yo", s);
-    std.log.warn("abs {s}", .{ff}); // get the abs part from rel part
+pub fn openFile(allocator: Allocator, path: []const u8) ![]const u8 {
+    var pathBuf: [std.fs.MAX_PATH_BYTES]u8 = undefined;
+    var file: std.fs.File = undefined;
 
-    try expect(std.fs.path.isAbsolute(ff));
-    try expect(!std.fs.path.isAbsolute("./zig-out/bin/yo"));
+    if (std.fs.path.isAbsolute(path)) {
+        file = try std.fs.openFileAbsolute(path, .{ .mode = std.fs.File.OpenMode.read_only });
+    } else {
+        const absPath = try std.fs.cwd().realpath(path, pathBuf[0..]);
+        file = try std.fs.openFileAbsolute(absPath, .{ .mode = std.fs.File.OpenMode.read_only });
+    }
 
-    const d = std.fs.path.dirname("./zig-out/bin").?; // not working; strip out the /bin part
-    std.log.warn("dirname {s}", .{d});
-    const kk = try std.fs.createFileAbsolute(ff, .{});
-    const md = try kk.metadata();
-    std.log.warn("dirname2 {s}", .{@tagName(md.kind())}); // File
+    defer file.close();
+
+    return try file.readToEndAlloc(allocator, try file.getEndPos());
 }
 
-test "file size" {
-    var tmp_dir = testing.tmpDir(.{}); // This creates a directory under ./zig-cache/tmp/{hash}/test_file
-    defer tmp_dir.cleanup(); // commented out this line so, you can see the file after execution finished.
+const testing = std.testing;
+const expect = testing.expect;
 
-    var file1 = try tmp_dir.dir.createFile("test_file", .{ .read = true });
-    defer file1.close();
+test "template" {
+    var tmp_dir = testing.tmpDir(.{});
+    defer tmp_dir.cleanup();
 
-    const write_buf: []const u8 = "Hello Zig!";
-    try file1.writeAll(write_buf);
+    var buffer: [std.fs.MAX_PATH_BYTES]u8 = undefined;
+    const path = try createTestFile(tmp_dir, "test.template", "hello {{ world }}", buffer[0..]);
+    warn("test file {s}", .{path});
 
-    try expect(file1.getEndPos() catch 0 == 10);
+    var t = try Template().init(testing.allocator, path);
+    defer t.deinit();
+    warn("test file content {s}", .{try t.output()});
 }
 
-test "create a file and then open and read it" {
-    var tmp_dir = testing.tmpDir(.{}); // This creates a directory under ./zig-cache/tmp/{hash}/test_file
-    defer tmp_dir.cleanup(); // commented out this line so, you can see the file after execution finished.
+fn createTestFile(dir: testing.TmpDir, name: []const u8, content: []const u8, outPath: []u8) ![]u8 {
+    var f = try dir.dir.createFile(name, .{ .read = true });
+    defer f.close();
 
-    var file1 = try tmp_dir.dir.createFile("test_file", .{ .read = true });
-    defer file1.close();
+    const buf: []const u8 = content;
+    try f.writeAll(buf);
 
-    const write_buf: []const u8 = "Hello Zig!";
-    try file1.writeAll(write_buf);
-
-    var file2 = try tmp_dir.dir.openFile("test_file", .{});
-    defer file2.close();
-
-    const read_buf = try file2.readToEndAlloc(testing.allocator, 1024);
-    defer testing.allocator.free(read_buf);
-
-    try testing.expect(std.mem.eql(u8, write_buf, read_buf));
+    return try dir.dir.realpath(name, outPath);
 }
